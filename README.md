@@ -41,76 +41,53 @@ its visual representation at same time.
 ```
 $ ./runRMovC.sh Example.bd mux2
 LEmpty {
-  LBI: mux2 ((IN:m.0), (IN:m.1), (IN:x.0), (IN:x.1), (IN:y.0), (IN:y.1)) -> ((mux2:a.0#3), (mux2:a.1#3), (mux2:b.0#3), (mux2:b.1#3), (mux2.muxb:a.0#2), (mux2.muxb:a.1#1), (mux2.muxb:b.0#2), (mux2.muxb:b.1#1), (mux2.muxb:ma.0), (mux2.muxb:ma.1#1)) @ mux2 {
-    Level: 0 -> 3 {
-      LBI: muxa ((IN:m.0), (IN:m.1), (IN:x.0), (IN:x.1)) -> ((mux2.muxa:a.0#2), (mux2.muxa:a.1#1), (mux2.muxa:b.0#2), (mux2.muxa:b.1#1), (mux2.muxa:ma.0), (mux2.muxa:ma.1#1)) @ mux2.muxa {
+  LBI: mux2 ((IN:m.0), (IN:m.1), (IN:x.0), (IN:x.1), (IN:y.0), (IN:y.1)) -> ((mux2:a.0#2), (mux2:a.1#2), (mux2:b.0#2), (mux2:b.1#2), (mux2.muxb:a.0#1), (mux2.muxb:a.1), (mux2.muxb:b.0#1), (mux2.muxb:b.1), (mux2.muxb:ma.0), (mux2.muxb:ma.1)) @ mux2 {
+    Level: 0 -> 2 {
+      LBI: muxa ((IN:m.0), (IN:m.1), (IN:x.0), (IN:x.1)) -> ((mux2.muxa:a.0#1), (mux2.muxa:a.1), (mux2.muxa:b.0#1), (mux2.muxa:b.1), (mux2.muxa:ma.0), (mux2.muxa:ma.1)) @ mux2.muxa {
         Level: 0 -> 1 {
           cmov	(IN:m.1) (IN:x.0) -> (mux2.muxa:r) (mux2.muxa:a.0) (mux2.muxa:b.0)
         }
         Level: 1 -> 2 {
           mov	(IN:x.1) -> (mux2.muxa:x.1#1)
           cmov	(mux2.muxa:r) (mux2.muxa:x.1#1) -> (mux2.muxa:ma.1) (mux2.muxa:a.1) (mux2.muxa:b.1)
-        }
-        Level: 2 -> 3 {
           mov	(IN:m.0) -> (mux2.muxa:m.0#1)
-          mov	(mux2.muxa:m.0#1) -> (mux2.muxa:m.0#2)
-          mov	(mux2.muxa:m.0#2) -> (mux2.muxa:ma.0)
+          mov	(mux2.muxa:m.0#1) -> (mux2.muxa:ma.0)
         }
         mov	(mux2.muxa:a.0) -> (mux2.muxa:a.0#1)
-        mov	(mux2.muxa:a.0#1) -> (mux2.muxa:a.0#2)
-        mov	(mux2.muxa:a.1) -> (mux2.muxa:a.1#1)
         mov	(mux2.muxa:b.0) -> (mux2.muxa:b.0#1)
-        mov	(mux2.muxa:b.0#1) -> (mux2.muxa:b.0#2)
-        mov	(mux2.muxa:b.1) -> (mux2.muxa:b.1#1)
-        mov	(mux2.muxa:ma.1) -> (mux2.muxa:ma.1#1)
       }
     }
-    Level: 3 -> 6 {
+    Level: 2 -> 4 {
       mov	(IN:y.0) -> (mux2:y.0#1)
       mov	(mux2:y.0#1) -> (mux2:y.0#2)
-      mov	(mux2:y.0#2) -> (mux2:y.0#3)
       mov	(IN:y.1) -> (mux2:y.1#1)
       mov	(mux2:y.1#1) -> (mux2:y.1#2)
-      mov	(mux2:y.1#2) -> (mux2:y.1#3)
-      LBI: muxb ((mux2.muxa:ma.0), (mux2.muxa:ma.1#1), (mux2:y.0#3), (mux2:y.1#3)) -> ((mux2.muxb:a.0#2), (mux2.muxb:a.1#1), (mux2.muxb:b.0#2), (mux2.muxb:b.1#1), (mux2.muxb:ma.0), (mux2.muxb:ma.1#1)) @ mux2.muxb {
+      LBI: muxb ((mux2.muxa:ma.0), (mux2.muxa:ma.1), (mux2:y.0#2), (mux2:y.1#2)) -> ((mux2.muxb:a.0#1), (mux2.muxb:a.1), (mux2.muxb:b.0#1), (mux2.muxb:b.1), (mux2.muxb:ma.0), (mux2.muxb:ma.1)) @ mux2.muxb {
+        Level: 2 -> 3 {
+          cmov	(mux2.muxa:ma.1) (mux2:y.0#2) -> (mux2.muxb:r) (mux2.muxb:a.0) (mux2.muxb:b.0)
+        }
         Level: 3 -> 4 {
-          cmov	(mux2.muxa:ma.1#1) (mux2:y.0#3) -> (mux2.muxb:r) (mux2.muxb:a.0) (mux2.muxb:b.0)
-        }
-        Level: 4 -> 5 {
-          mov	(mux2:y.1#3) -> (mux2.muxb:x.1#1)
+          mov	(mux2:y.1#2) -> (mux2.muxb:x.1#1)
           cmov	(mux2.muxb:r) (mux2.muxb:x.1#1) -> (mux2.muxb:ma.1) (mux2.muxb:a.1) (mux2.muxb:b.1)
-        }
-        Level: 5 -> 6 {
           mov	(mux2.muxa:ma.0) -> (mux2.muxb:m.0#1)
-          mov	(mux2.muxb:m.0#1) -> (mux2.muxb:m.0#2)
-          mov	(mux2.muxb:m.0#2) -> (mux2.muxb:ma.0)
+          mov	(mux2.muxb:m.0#1) -> (mux2.muxb:ma.0)
         }
         mov	(mux2.muxb:a.0) -> (mux2.muxb:a.0#1)
-        mov	(mux2.muxb:a.0#1) -> (mux2.muxb:a.0#2)
-        mov	(mux2.muxb:a.1) -> (mux2.muxb:a.1#1)
         mov	(mux2.muxb:b.0) -> (mux2.muxb:b.0#1)
-        mov	(mux2.muxb:b.0#1) -> (mux2.muxb:b.0#2)
-        mov	(mux2.muxb:b.1) -> (mux2.muxb:b.1#1)
-        mov	(mux2.muxb:ma.1) -> (mux2.muxb:ma.1#1)
       }
     }
-    mov	(mux2.muxa:a.0#2) -> (mux2:a.0#1)
+    mov	(mux2.muxa:a.0#1) -> (mux2:a.0#1)
     mov	(mux2:a.0#1) -> (mux2:a.0#2)
-    mov	(mux2:a.0#2) -> (mux2:a.0#3)
-    mov	(mux2.muxa:a.1#1) -> (mux2:a.1#1)
+    mov	(mux2.muxa:a.1) -> (mux2:a.1#1)
     mov	(mux2:a.1#1) -> (mux2:a.1#2)
-    mov	(mux2:a.1#2) -> (mux2:a.1#3)
-    mov	(mux2.muxa:b.0#2) -> (mux2:b.0#1)
+    mov	(mux2.muxa:b.0#1) -> (mux2:b.0#1)
     mov	(mux2:b.0#1) -> (mux2:b.0#2)
-    mov	(mux2:b.0#2) -> (mux2:b.0#3)
-    mov	(mux2.muxa:b.1#1) -> (mux2:b.1#1)
+    mov	(mux2.muxa:b.1) -> (mux2:b.1#1)
     mov	(mux2:b.1#1) -> (mux2:b.1#2)
-    mov	(mux2:b.1#2) -> (mux2:b.1#3)
   }
 }
+
 ```
 
 [Diagram for `mux2`](https://gist.github.com/Ming-Tang/58607a987c4439555f33490caf09ef43)
-
-
 
