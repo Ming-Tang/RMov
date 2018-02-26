@@ -1,0 +1,63 @@
+movs {
+  in { a, b, c, d, e, f }
+  out { u, v, w, x, y, z }
+  int { a1, b1, b2, c1, e1 }
+  body {
+    b1, a1 <- a, b;
+    e1 <- e;
+    ---------
+    c1, b2 <- e1, c;
+    v, w, x, y, z <- d, c1, a1, b1, b2;
+    ---------
+    u <- f;
+  }
+}
+
+mux {
+  in { m.0, m.1, x.0, x.1 }
+  out { a.0, a.1, b.0, b.1, ma.0, ma.1 }
+  int { r }
+  body {
+    r, a.0, b.0 = T(m.1, x.0);
+    ----------
+    ma.1, a.1, b.1 = T(r, x.1);
+    ----------
+    ma.0 <- m.0;
+  }
+}
+
+muxS {
+  in { m*, x* }
+  out { a*, b*, ma* }
+  int { r }
+  body {
+    r, [a, b].0 = T(m.1, x.0);
+    ----------
+    [ma, a, b].1 = T(r, x.1);
+    ----------
+    ma.0 <- m.0;
+  }
+}
+
+mux2 {
+  in { m.0, m.1, x.0, x.1, y.0, y.1 }
+  out { a.0, a.1, b.0, b.1, c.0, c.1, d.0, d.1, mb.0, mb.1 }
+  int { ma.0, ma.1 }
+  body {
+    a.0, a.1, b.0, b.1, ma.0, ma.1 = muxa:mux(m.0, m.1, x.0, x.1);
+    ------------
+    c.0, c.1, d.0, d.1, mb.0, mb.1 = muxb:mux(ma.0, ma.1, y.0, y.1);
+  }
+}
+
+mux2S {
+  in { m*, x*, y* }
+  out { a*, b*, c*, d*, mb* }
+  int { ma* }
+  body {
+    a*, b*, ma* = muxa:mux(m*, x*);
+    ------------
+    c*, d*, mb* = muxb:mux(ma*, y*);
+  }
+}
+

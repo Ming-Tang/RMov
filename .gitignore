@@ -1,0 +1,7 @@
+*.hi
+*.o
+RmovC
+rmov
+*.dot
+*.svg
+*.dSYM/*
