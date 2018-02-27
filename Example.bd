@@ -7,8 +7,8 @@ movs {
     e1 <- e;
     ---------
     c1, b2 <- e1, c;
-    v, w, x, y, z <- d, c1, a1, b1, b2;
     ---------
+    v, w, x, y, z <- d, c1, a1, b1, b2;
     u <- f;
   }
 }
@@ -33,7 +33,6 @@ muxS {
     r, [a, b].0 = T(m.1, x.0);
     ----------
     [ma, a, b].1 = T(r, x.1);
-    ----------
     ma.0 <- m.0;
   }
 }
@@ -57,6 +56,41 @@ mux2S {
     a*, b*, ma* = muxa:mux(m*, x*);
     ------------
     c*, d*, mb* = muxb:mux(ma*, y*);
+  }
+}
+
+demux {
+  in { a*, b*, ma* }
+  out { m*, x* }
+  int { r }
+  body {
+    m.0 <- ma.0;
+    r, x.1 = ~T([ma, a, b].1);
+    ----------
+    m.1, x.0 = ~T(r, [a, b].0);
+  }
+}
+
+not {
+  in { x.0, x.1 }
+  out { y.0, y.1 }
+  body {
+    y.0 <- x.1;
+    y.1 <- x.0;
+  }
+}
+
+cnot {
+  in { m*, x* }
+  out { ma*, y* }
+  int { a*, b*, p*, q*, mb* }
+  body {
+    a*, b*, mb* = muxa:mux(m*, x*);
+    ------------
+    p* <- a*;
+    q* = not1:not(b*);
+    ------------
+    y*, ma* = demuxa:demux(mb*, p*, q*);
   }
 }
 

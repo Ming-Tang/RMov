@@ -20,6 +20,10 @@ import Text.Parsec.Perm
 import System.Environment
 import System.Exit
 
+-- TODO input validation: data dependencies, linear typing
+-- TODO automatic placement of dividers
+-- TODO inverting blocks
+
 -- Main
 
 data Op = OBd | OInstrs | OCpp | ODot
@@ -53,14 +57,16 @@ main = do
       print' $ M.keys bds
       exitSuccess
 
-    Just b ->
-      let em = fromRight (runEmitFromMap (["IN"], "") b bds) in
-      let ((outs, d), eS, instrs) = em in
+    Just b -> do
+      let inScope = ["IN"]
+      let em = fromRight (runEmitFromMap (inScope, "") b bds)
+      let ((outs, d), eS, instrs) = em
+      let bd = bds M.! b
       case op of
-        Nothing -> printRes em
-        Just OBd -> print' (bds M.! b)
+        Nothing -> printRes (inScope, bd) em
+        Just OBd -> print' bd
         Just OInstrs -> putStrLn $ dispTree dtITree $ toITree instrs
-        Just OCpp -> putStrLn $ instrsToCpp instrs
+        Just OCpp -> putStrLn $ instrsToCpp (inScope, outs, bd) instrs
         Just ODot -> putStrLn $ instrsToGraphviz instrs
 
   return ()
@@ -166,8 +172,9 @@ emitPerm5 = fromRight emitPerm50
 --  z  y  x
 --
 
-runEmitFromMap :: (Scope, String) -> String -> Map String BlockDef
-                                  -> Either EmitE ((Map AName Addr, Delay), EmitS, EmitW)
+runEmitFromMap :: (Scope, String)
+                    -> String -> Map String BlockDef
+                    -> Either EmitE ((Map AName Addr, Delay), EmitS, EmitW)
 
 runEmitFromMap (inScope, inPrefix) name bds =
     runEmit ctx emptyEmitS $ emitBD name b where
@@ -185,14 +192,14 @@ show' = prettyShow
 print' :: Show a => a -> IO ()
 print' = putStrLn . show'
 
-printRes ((outs, d), eS, instrs) = do
+printRes (inScope, bd) ((outs, d), eS, instrs) = do
   print' outs
   print' d
   print' eS
   putStrLn "------"
   putStrLn $ dispTree dtITree $ toITree instrs
   putStrLn "------"
-  putStrLn $ instrsToCpp instrs
+  putStrLn $ instrsToCpp (inScope, outs, bd) instrs
   putStrLn "------"
   putStrLn $ instrsToGraphviz instrs
 
@@ -617,19 +624,52 @@ travInstrs m [] = m
 travInstrs m (i:is) = travInstrs m' is where
   (ins, outs) = addrs i
   ds = nub $ concatMap (maybe [] pure . (`M.lookup` m)) ins
-  d = case ds of { [d] -> d ; _ -> error $ "travInstrs: bad depth: " ++ show (ds, ins) ++ "\n" ++ show' m }
+  d = case ds of
+         [d] -> d
+         _ -> error $ "travInstrs: bad depth: "
+                       ++ show (ds, ins) ++ "\n" ++ show' m
+
   d' = d + 1
   m' = foldl' (\m a -> M.insert a d' m) m outs
 
 --------------------------------
 
-instrsToCpp :: [Instr] -> String
-instrsToCpp instrs = dispTree dtCpp vp ++ "\n" ++ dispTree dtCpp ip where
+sortByIdx :: (Ord a, Ord b) => (a -> b, [b], Bool) -> [a] -> [a]
+sortByIdx (f, xs, k) = map snd . sort . map f1 where
+  f1 a@(f -> n) = (fromMaybe m $ lookup n xs', a)
+  xs' = zip xs ([0..] :: [Integer])
+  m = if k then 1 + fromIntegral (length xs) else -1
+
+instrsToCpp :: (Scope, Map AName Addr, BlockDef) -> [Instr] -> String
+instrsToCpp s@(inScope, outs, BD { bdIn, bdOut }) instrs =
+             dispTree dtCpp vIn ++ "\n"
+          ++ dispTree dtCpp vOut ++ "\n"
+          ++ dispTree dtCpp vp ++ "\n"
+          ++ dispTree dtCpp vI ++ "\n"
+          where
+
   ias = indices instrs
   mi = M.fromList $ map (\(a, b) -> (b, a)) ias
   getI = (mi M.!)
-  vp = cppVec "std::string" "instr_names" $ map (show . dispAddr . snd) ias
-  ip = cppVec "instr" "instrs" $ map instrToCpp $ filter isEssential instrs
+
+  vp = cppVec' "string" "addr_names"
+         $ map (\(b, a) -> show (dispAddr a) ++ ", \t// " ++ show b) ias
+  vI = cppVec "instr" "instrs" $ map instrToCpp $ filter isEssential instrs
+
+  vIn = cppVec' "int" "in_idx" $ map (nLine (`lookup` inAddrs)) ins'
+  vOut = cppVec' "int" "out_idx" $ map (nLine (`M.lookup` outs)) outs'
+
+  nLine lookup (n, i) = show (getI $ fromJust $ lookup n) ++ ", \t// " ++ show n
+
+  inAddrs :: [(AName, Addr)]
+  inAddrs = map (\(_, a, s) -> (s, a))
+              $ sort $ concatMap ((\a@(A _ sc s) -> [ (lookup s ins', a, s)
+                                                    | sc == inScope ]) . snd) ias
+
+  fromZ :: [Integer]
+  fromZ = [0..]
+  ins' = zip bdIn fromZ
+  outs' = zip bdOut fromZ
 
   isEssential IBeginGroup = False
   isEssential (IEndGroup _) = False
@@ -645,8 +685,9 @@ instrsToCpp instrs = dispTree dtCpp vp ++ "\n" ++ dispTree dtCpp ip where
 indices :: [Instr] -> [(Integer, Addr)]
 indices = zip [0..] . nub . concatMap (uncurry (++) . addrs)
 
-cppVec :: String -> String -> [String] -> STree
+cppVec, cppVec' :: String -> String -> [String] -> STree
 cppVec t n (map (Leaf . (++ ",")) -> xs) = Node ("vector<" ++ t ++ "> " ++ n) xs
+cppVec' t n (map Leaf -> xs) = Node ("vector<" ++ t ++ "> " ++ n) xs
 
 --------------------------------
 
@@ -737,7 +778,8 @@ emitBD instName BD { bdBody } =
       EC { ecIns, ecOuts, ecScope } <- ask
 
       let getL = do outs' <- mapM getAddr ecOuts
-                    let lbi = LBI instName ecScope ecIns (M.fromList $ zip ecOuts outs')
+                    let lbi = LBI instName ecScope ecIns
+                                (M.fromList $ zip ecOuts outs')
                     return $ LBlock lbi
 
       group' getL $ do
