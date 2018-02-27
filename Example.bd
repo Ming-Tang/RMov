@@ -90,7 +90,7 @@ cnot {
     p* <- a*;
     q* = not1:not(b*);
     ------------
-    y*, ma* = demuxa:demux(mb*, p*, q*);
+    ma*, y* = demuxa:demux(p*, q*, mb*);
   }
 }
 

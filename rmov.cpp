@@ -289,7 +289,88 @@ void simulate_demux() {
   simulate(in_idx, out_idx, addr_names, instrs, ps);
 }
 
+void simulate_cnot() {
+  vector<int> in_idx {
+    10, 	// "m.0"
+    0, 	// "m.1"
+    1, 	// "x.0"
+    5, 	// "x.1"
+  };
+
+  vector<int> out_idx {
+    28, 	// "ma.0"
+    26, 	// "ma.1"
+    27, 	// "y.0"
+    29, 	// "y.1"
+  };
+
+  vector<string> addr_names {
+    "(IN:m.1)", 	// 0
+    "(IN:x.0)", 	// 1
+    "(cnot.muxa:r)", 	// 2
+    "(cnot.muxa:a.0)", 	// 3
+    "(cnot.muxa:b.0)", 	// 4
+    "(IN:x.1)", 	// 5
+    "(cnot.muxa:x.1#1)", 	// 6
+    "(cnot.muxa:ma.1)", 	// 7
+    "(cnot.muxa:a.1)", 	// 8
+    "(cnot.muxa:b.1)", 	// 9
+    "(IN:m.0)", 	// 10
+    "(cnot.muxa:m.0#1)", 	// 11
+    "(cnot.muxa:ma.0)", 	// 12
+    "(cnot.muxa:a.0#1)", 	// 13
+    "(cnot.muxa:b.0#1)", 	// 14
+    "(cnot:p.0)", 	// 15
+    "(cnot:p.1)", 	// 16
+    "(cnot.not1:y.0)", 	// 17
+    "(cnot.not1:y.1)", 	// 18
+    "(cnot:mb.0#1)", 	// 19
+    "(cnot:mb.1#1)", 	// 20
+    "(cnot.demuxa:m.0)", 	// 21
+    "(cnot.demuxa:r)", 	// 22
+    "(cnot.demuxa:x.1)", 	// 23
+    "(cnot.demuxa:a.0#1)", 	// 24
+    "(cnot.demuxa:b.0#1)", 	// 25
+    "(cnot.demuxa:m.1)", 	// 26
+    "(cnot.demuxa:x.0)", 	// 27
+    "(cnot.demuxa:m.0#1)", 	// 28
+    "(cnot.demuxa:x.1#1)", 	// 29
+  };
+
+  vector<instr> instrs {
+    cmov(0, 1, 2, 3, 4),
+    mov(5, 6),
+    cmov(2, 6, 7, 8, 9),
+    mov(10, 11),
+    mov(11, 12),
+    mov(3, 13),
+    mov(4, 14),
+    mov(13, 15),
+    mov(8, 16),
+    mov(9, 17),
+    mov(14, 18),
+    mov(12, 19),
+    mov(7, 20),
+    mov(19, 21),
+    rcmov(22, 23, 20, 16, 18),
+    mov(15, 24),
+    mov(17, 25),
+    rcmov(26, 27, 22, 24, 25),
+    mov(21, 28),
+    mov(23, 29),
+  };
+
+  vector<pvc> ps {
+    {{1, 0, 1, 0}, {1, 0, 1, 0}},
+    {{0, 1, 1, 0}, {0, 1, 0, 1}},
+    {{1, 0, 0, 1}, {1, 0, 0, 1}},
+    {{0, 1, 0, 1}, {0, 1, 1, 0}},
+  };
+
+  simulate(in_idx, out_idx, addr_names, instrs, ps);
+}
+
 int main() {
-  simulate_demux();
+  simulate_cnot();
 }
 
