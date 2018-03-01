@@ -22,11 +22,10 @@ import System.Exit
 
 -- TODO input validation: data dependencies, linear typing
 -- TODO automatic placement of dividers
--- TODO inverting blocks
 
 -- Main
 
-data Op = OBd | OInstrs | OCpp | ODot
+data Op = OBd | OInstrs | OCpp | ODot | OInv
 
 main :: IO ()
 main = do
@@ -40,6 +39,7 @@ main = do
       [f, b, "instrs"] -> return (f, Just b, Just OInstrs)
       [f, b, "cpp"] -> return (f, Just b, Just OCpp)
       [f, b, "dot"] -> return (f, Just b, Just ODot)
+      [f, b, "inv"] -> return (f, Just b, Just OInv)
 
       _ -> do
         p <- getProgName
@@ -62,18 +62,30 @@ main = do
       let em = fromRight (runEmitFromMap (inScope, "") b bds)
       let ((outs, d), eS, instrs) = em
       let bd = bds M.! b
+
       case op of
         Nothing -> printRes (inScope, bd) em
         Just OBd -> print' bd
         Just OInstrs -> putStrLn $ dispTree dtITree $ toITree instrs
         Just OCpp -> putStrLn $ instrsToCpp (inScope, outs, bd) instrs
         Just ODot -> putStrLn $ instrsToGraphviz instrs
+        Just OInv -> do
+          let bd' = invBD bd
+          let bd'' = invBD bd'
+          print' bd'
+          putStrLn $ "consistent inverse: " ++ show (bd == bd'')
 
   return ()
 
 ----------------------------
 
 -- Samples
+
+emitMovs0, emitMux0, emitMux20, emitRev30, emitPerm50
+  :: Either EmitE RunEmitRes
+
+emitMovs, emitMux, emitMux2, emitRev3, emitPerm5
+  :: RunEmitRes
 
 movs :: BlockDef
 movs = BD { bdIn = ["a", "b", "c", "d", "e", "f"]
@@ -174,7 +186,7 @@ emitPerm5 = fromRight emitPerm50
 
 runEmitFromMap :: (Scope, String)
                     -> String -> Map String BlockDef
-                    -> Either EmitE ((Map AName Addr, Delay), EmitS, EmitW)
+                    -> Either EmitE RunEmitRes
 
 runEmitFromMap (inScope, inPrefix) name bds =
     runEmit ctx emptyEmitS $ emitBD name b where
@@ -192,6 +204,7 @@ show' = prettyShow
 print' :: Show a => a -> IO ()
 print' = putStrLn . show'
 
+printRes :: (Scope, BlockDef) -> RunEmitRes -> IO ()
 printRes (inScope, bd) ((outs, d), eS, instrs) = do
   print' outs
   print' d
@@ -222,7 +235,7 @@ lang :: P.LanguageDef st
 lang =
   emptyDef
     { P.identStart      = letter <|> char '_'
-    , P.identLetter     = alphaNum <|> oneOf "_"
+    , P.identLetter     = alphaNum <|> char '_'
     , P.reservedOpNames = ["=", "~", ".", "*", ":", "<-"]
     , P.reservedNames   = ["in", "out", "int", "body", "T"]
     , P.caseSensitive   = True }
@@ -270,9 +283,17 @@ bd = blk where
   movPart = arrow *> names
   funcPart = equals *> ((,) <$> funcName <*> parens names)
   funcName :: Parser u BName
-  funcName = (BN <$> ident <*> (colon *> ident))
-             <|> (const BT <$> tKw)
+  funcName = try (BN <$> ident <*> (colon *> ident))
+             <|> (BNI <$> ident <*> (colontilde *> ident))
              <|> (const BTI <$> (tilde *> tKw))
+             <|> (const BT <$> tKw)
+
+  bnPart = do
+    biName <- ident
+    _ <- colon
+    f <- (tilde *> (flip BNI <$> ident)) <|> (flip BN <$> ident)
+    return $ f biName
+
 
   assignStmt = getStmt <$> names <*> (fmap Left movPart <|> fmap Right funcPart)
 
@@ -315,6 +336,7 @@ bd = blk where
   num = P.natural lexer
   commaSep = P.commaSep lexer
 
+  colontilde = try (colon *> tilde) <|> P.reservedOp lexer ":~"
   arrow = P.reservedOp lexer "<-"
   tilde = P.reservedOp lexer "~"
   equals = P.reservedOp lexer "="
@@ -347,13 +369,14 @@ type FName = String
 
 type Args = [AName]
 
-data BName = BI | BT | BTI | BN BIName FName
+data BName = BI | BT | BTI | BN BIName FName | BNI BIName FName
   deriving (Eq, Ord, Show, Read)
 
 data ArgsPair = AP { apOut :: Args, apIn :: Args }
   deriving (Eq, Ord, Show, Read)
 
-type Level = [(BName, ArgsPair)]
+type Stmt = (BName, ArgsPair)
+type Level = [Stmt]
 
 data BlockDef = BD { bdIn :: [AName]
                    , bdOut :: [AName]
@@ -417,12 +440,17 @@ data EmitS = EmitS { esVars :: Map AName VarInfo
                    , esCurDelay :: Delay }
   deriving (Eq, Ord, Show, Read)
 
-data EmitE = EmitE { eeScope :: Scope, eeDelay :: Delay, eeVars :: Set AName, eeErr :: EmitErr }
+data EmitE = EmitE { eeScope :: Scope
+                   , eeDelay :: Delay
+                   , eeVars :: Set AName
+                   , eeErr :: EmitErr }
   deriving (Eq, Ord, Show, Read)
 
 newtype Emit a = Emit { getEmit :: RWST EmitCtx EmitW EmitS (Except EmitE) a }
   deriving (Functor, Applicative, Monad, MonadReader EmitCtx,
             MonadWriter EmitW, MonadState EmitS, MonadError EmitE)
+
+type RunEmitRes = ((Map AName Addr, Delay), EmitS, EmitW)
 
 ------------------------------
 
@@ -446,8 +474,10 @@ dispAddr (A dd scope n) = "(" ++ sp ++ n ++ dp ++ ")" where
 instance Show Addr where
   show a = "a " ++ show (dispAddr a)
 
+arrow :: String
 arrow = " -> "
 
+dispInstr :: Instr -> String
 dispInstr IBeginGroup = "# {"
 dispInstr (IEndGroup (LLevel d d1)) = "# } " ++ show (d, d1)
 dispInstr (IEndGroup l) = "# }"
@@ -538,6 +568,8 @@ iTreeToGraphviz (Leaf (ICMov False a b c d e)) =
 iTreeToGraphviz (Leaf (ICMov True a b c d e)) =
   Node "" <$> cmovToGraphviz True [c, d, e] [a, b]
 
+iTreeToGraphviz (Leaf _) = return $ Node "" []
+
 cmovToGraphviz :: Bool -> [Addr] -> [Addr] -> I2G [STree]
 cmovToGraphviz r ins outs = do
   c <- i2gCounter
@@ -555,11 +587,13 @@ cmovToGraphviz r ins outs = do
                $ zip outs ["s", "a", "b"]
   return $ [l1] ++ as ++ bs
 
+i2gCounter :: I2G Integer
 i2gCounter = do
   s@I2GS { i2gsCounter = c } <- get
   put s { i2gsCounter = c + 1 }
   return c
 
+gName :: I2G String
 gName = do
   c <- i2gCounter
   return $ "g" ++ show c
@@ -582,17 +616,21 @@ indent2, indent4 :: Int -> String
 indent2 = flip replicate ' ' . (2*)
 indent4 = flip replicate ' ' . (4*)
 
+bbrace :: String -> String
+bbrace "" = "{"
+bbrace s = s ++ " {"
+
 dtString :: DispTree String String
-dtString = DT (++ " {") id indent2 "}"
+dtString = DT bbrace id indent2 "}"
 
 dtCpp :: DispTree String String
-dtCpp = DT (++ " {") id indent2 "};"
+dtCpp = DT bbrace id indent2 "};"
 
 dtShow :: (Show b, Show l) => DispTree b l
-dtShow = DT ((++ " {") . show) show indent2 "}"
+dtShow = DT (bbrace . show) show indent2 "}"
 
 dtITree :: DispTree Label Instr
-dtITree = DT ((++ " {") . dispLabel) dispInstr indent2 "}"
+dtITree = DT (bbrace . dispLabel) dispInstr indent2 "}"
 
 dispTree :: DispTree b l  -> Tree b l -> String
 dispTree dt t = dispTree' dt ([], 0) [Just t]
@@ -691,6 +729,25 @@ cppVec' t n (map Leaf -> xs) = Node ("vector<" ++ t ++ "> " ++ n) xs
 
 --------------------------------
 
+invBD :: BlockDef -> BlockDef
+invBD BD { bdIn, bdOut, bdInt, bdBody } =
+  BD { bdIn = bdOut, bdOut = bdIn, bdInt, bdBody = invBody bdBody }
+
+invBody :: [Level] -> [Level]
+invBody = reverse . map (reverse . map invStmt)
+
+invStmt :: Stmt -> Stmt
+invStmt (bn, AP o i) = (invBName bn, AP i o)
+
+invBName :: BName -> BName
+invBName BI = BI
+invBName BT = BTI
+invBName BTI = BT
+invBName (BN n fn) = BNI n fn
+invBName (BNI n fn) = BN n fn
+
+--------------------------------
+
 emitInstrs :: [Instr] -> Emit ()
 emitInstrs = tell
 
@@ -700,6 +757,7 @@ emptyCtx = EC M.empty [] [] M.empty
 runEmit :: EmitCtx -> EmitS -> Emit a -> Either EmitE (a, EmitS, EmitW)
 runEmit c s (getEmit -> e) = runExcept $ runRWST e c s
 
+emptyEmitS :: EmitS
 emptyEmitS = EmitS M.empty 0
 
 emitErr :: EmitErr -> Emit a
@@ -800,6 +858,7 @@ emitBD instName BD { bdBody } =
 
         return (outVars, esCurDelay)
 
+addScope :: String -> EmitCtx -> EmitCtx
 addScope instName ec@EC { ecScope } = ec { ecScope = ecScope ++ [instName] }
 
 emitLevel :: Level -> Emit ()
@@ -875,9 +934,15 @@ emitSingle' BT (AP xs@[a, b, c] [d, e]) =
 emitSingle' BTI (AP _ _) = emitErr $ BIArityErr BTI
 emitSingle' BT (AP _ _) = emitErr $ BIArityErr BT
 
-emitSingle' (BN instName name) (AP outs ins) =
+emitSingle' (BN instName name) ap =
+  getBD name >>= emitSingleBD instName ap
+
+emitSingle' (BNI instName name) ap =
+  invBD <$> getBD name >>= emitSingleBD instName ap
+
+emitSingleBD :: String -> ArgsPair -> BlockDef -> Emit Delay
+emitSingleBD instName (AP outs ins) bd@BD { bdIn, bdOut } =
   withOuts outs $ do
-    bd@BD { bdIn, bdOut } <- getBD name
     scope <- getScope
     EC { ecBDs } <- ask
     inAddrs <- mapM getAddr ins

@@ -94,3 +94,17 @@ cnot {
   }
 }
 
+cnot1 {
+  in { m*, x* }
+  out { ma*, y* }
+  int { a*, b*, p*, q*, mb* }
+  body {
+    a*, b*, mb* = muxa:mux(m*, x*);
+    ------------
+    p* <- a*;
+    q* = not1:not(b*);
+    ------------
+    ma*, y* = demuxa:~mux(p*, q*, mb*);
+  }
+}
+
