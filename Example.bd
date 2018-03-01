@@ -59,6 +59,19 @@ mux2S {
   }
 }
 
+mux3 {
+  in { m*, x*, y*, z* }
+  out { a*, b*, c*, d*, e*, f*, mc* }
+  int { ma*, mb* }
+  body {
+    a*, d*, ma* = muxa:mux(m*, x*);
+    ------------
+    b*, e*, mb* = muxb:mux(ma*, y*);
+    ------------
+    c*, f*, mc* = muxc:mux(mb*, z*);
+  }
+}
+
 demux {
   in { a*, b*, ma* }
   out { m*, x* }
@@ -124,14 +137,26 @@ cnot2 {
 ccnot {
   in { m0*, m1*, x* }
   out { ma0*, ma1*, y* }
-  int { a*, b*, c*, d*, e*, f*, g*, h*, mb* }
+  int { a*, b*, c*, d*, g*, h*, mb* }
   body {
     a*, b*, c*, d*, mb* = mux2a:mux2S(m0*, m1*, x*);
     ------------
-    e*, f* <- a*, b*;
     g*, h* = cnot1:cnot1(c*, d*);
     ------------
-    ma0*, ma1*, y* = mux2b:~mux2S(e*, f*, g*, h*, mb*);
+    ma0*, ma1*, y* = mux2b:~mux2S(a*, b*, g*, h*, mb*);
+  }
+}
+
+cccnot {
+  in { m0*, m1*, m2*, x* }
+  out { ma0*, ma1*, ma2*, y* }
+  int { a*, b*, c*, d*, e*, f*, j*, k*, l*, mb* }
+  body {
+    a*, b*, c*, d*, e*, f*, mb* = mux3a:mux3(m0*, m1*, m2*, x*);
+    ------------
+    j*, k*, l* = ccnot1:ccnot(d*, e*, f*);
+    ------------
+    ma0*, ma1*, ma2*, y* = mux3b:~mux3(a*, b*, c*, j*, k*, l*, mb*);
   }
 }
 
