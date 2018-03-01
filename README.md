@@ -16,9 +16,11 @@ programs.
 
 # `rmov`
 
-Compile with `g++ --std=gnu++14 rmov.cpp -g -o rmov`
-
 Simulator of RMov in C++.
+
+First run `./runRMovC.sh Example.bd ccnot` to generate code.
+
+Compile with `g++ --std=gnu++14 rmov.cpp -g -o rmov`.
 
 # `RMovC`
 

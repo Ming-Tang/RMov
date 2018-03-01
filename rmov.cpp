@@ -179,51 +179,9 @@ void simulate(
   }
 }
 
+#if 0
 void simulate_mux() {
-  vector<int> in_idx {
-    10, // "m.0"
-    0,  // "m.1"
-    1,  // "x.0"
-    5,  // "x.1"
-  };
-
-  vector<int> out_idx {
-    13, // "a.0"
-    8,  // "a.1"
-    14, // "b.0"
-    9,  // "b.1"
-    12, // "ma.0"
-    7,  // "ma.1"
-  };
-
-  vector<std::string> addr_names {
-    "(IN:m.1)",    // 0
-    "(IN:x.0)",    // 1
-    "(mux:r)",     // 2
-    "(mux:a.0)",   // 3
-    "(mux:b.0)",   // 4
-    "(IN:x.1)",    // 5
-    "(mux:x.1#1)", // 6
-    "(mux:ma.1)",  // 7
-    "(mux:a.1)",   // 8
-    "(mux:b.1)",   // 9
-    "(IN:m.0)",    // 10
-    "(mux:m.0#1)", // 11
-    "(mux:ma.0)",  // 12
-    "(mux:a.0#1)", // 13
-    "(mux:b.0#1)", // 14
-  };
-
-  vector<instr> instrs {
-    cmov(0, 1, 2, 3, 4),
-    mov(5, 6),
-    cmov(2, 6, 7, 8, 9),
-    mov(10, 11),
-    mov(11, 12),
-    mov(3, 13),
-    mov(4, 14),
-  };
-
+#include "gen_mux.h"
   vector<pvc> ps {
     {{1, 0, 1, 0}, {1, 0, 0, 0, 1, 0}},
     {{0, 1, 1, 0}, {0, 0, 1, 0, 0, 1}},
@@ -235,49 +193,7 @@ void simulate_mux() {
 }
 
 void simulate_demux() {
-  vector<int> in_idx {
-    7, 	// "a.0"
-    3, 	// "a.1"
-    9, 	// "b.0"
-    4, 	// "b.1"
-    0, 	// "ma.0"
-    2, 	// "ma.1"
-  };
-
-  vector<int> out_idx {
-    13, 	// "m.0"
-    11, 	// "m.1"
-    12, 	// "x.0"
-    14, 	// "x.1"
-  };
-
-  vector<string> addr_names {
-    "(IN:ma.0)", 	// 0
-    "(demux:m.0)", 	// 1
-    "(IN:ma.1)", 	// 2
-    "(IN:a.1)", 	// 3
-    "(IN:b.1)", 	// 4
-    "(demux:r)", 	// 5
-    "(demux:x.1)", 	// 6
-    "(IN:a.0)", 	// 7
-    "(demux:a.0#1)", 	// 8
-    "(IN:b.0)", 	// 9
-    "(demux:b.0#1)", 	// 10
-    "(demux:m.1)", 	// 11
-    "(demux:x.0)", 	// 12
-    "(demux:m.0#1)", 	// 13
-    "(demux:x.1#1)", 	// 14
-  };
-
-  vector<instr> instrs {
-    mov(0, 1),
-    rcmov(5, 6, 2, 3, 4),
-    mov(7, 8),
-    mov(9, 10),
-    rcmov(11, 12, 5, 8, 10),
-    mov(1, 13),
-    mov(6, 14),
-  };
+#include "gen_demux.h"
 
   vector<pvc> ps {
     {{1, 0, 0, 0, 1, 0}, {1, 0, 1, 0}},
@@ -290,75 +206,7 @@ void simulate_demux() {
 }
 
 void simulate_cnot() {
-  vector<int> in_idx {
-    10, 	// "m.0"
-    0, 	// "m.1"
-    1, 	// "x.0"
-    5, 	// "x.1"
-  };
-
-  vector<int> out_idx {
-    28, 	// "ma.0"
-    26, 	// "ma.1"
-    27, 	// "y.0"
-    29, 	// "y.1"
-  };
-
-  vector<string> addr_names {
-    "(IN:m.1)", 	// 0
-    "(IN:x.0)", 	// 1
-    "(cnot.muxa:r)", 	// 2
-    "(cnot.muxa:a.0)", 	// 3
-    "(cnot.muxa:b.0)", 	// 4
-    "(IN:x.1)", 	// 5
-    "(cnot.muxa:x.1#1)", 	// 6
-    "(cnot.muxa:ma.1)", 	// 7
-    "(cnot.muxa:a.1)", 	// 8
-    "(cnot.muxa:b.1)", 	// 9
-    "(IN:m.0)", 	// 10
-    "(cnot.muxa:m.0#1)", 	// 11
-    "(cnot.muxa:ma.0)", 	// 12
-    "(cnot.muxa:a.0#1)", 	// 13
-    "(cnot.muxa:b.0#1)", 	// 14
-    "(cnot:p.0)", 	// 15
-    "(cnot:p.1)", 	// 16
-    "(cnot.not1:y.0)", 	// 17
-    "(cnot.not1:y.1)", 	// 18
-    "(cnot:mb.0#1)", 	// 19
-    "(cnot:mb.1#1)", 	// 20
-    "(cnot.demuxa:m.0)", 	// 21
-    "(cnot.demuxa:r)", 	// 22
-    "(cnot.demuxa:x.1)", 	// 23
-    "(cnot.demuxa:a.0#1)", 	// 24
-    "(cnot.demuxa:b.0#1)", 	// 25
-    "(cnot.demuxa:m.1)", 	// 26
-    "(cnot.demuxa:x.0)", 	// 27
-    "(cnot.demuxa:m.0#1)", 	// 28
-    "(cnot.demuxa:x.1#1)", 	// 29
-  };
-
-  vector<instr> instrs {
-    cmov(0, 1, 2, 3, 4),
-    mov(5, 6),
-    cmov(2, 6, 7, 8, 9),
-    mov(10, 11),
-    mov(11, 12),
-    mov(3, 13),
-    mov(4, 14),
-    mov(13, 15),
-    mov(8, 16),
-    mov(9, 17),
-    mov(14, 18),
-    mov(12, 19),
-    mov(7, 20),
-    mov(19, 21),
-    rcmov(22, 23, 20, 16, 18),
-    mov(15, 24),
-    mov(17, 25),
-    rcmov(26, 27, 22, 24, 25),
-    mov(21, 28),
-    mov(23, 29),
-  };
+#include "gen_cnot.h"
 
   vector<pvc> ps {
     {{1, 0, 1, 0}, {1, 0, 1, 0}},
@@ -370,7 +218,38 @@ void simulate_cnot() {
   simulate(in_idx, out_idx, addr_names, instrs, ps);
 }
 
+void simulate_cnot2() {
+#include "gen_cnot2.h"
+
+  vector<pvc> ps {
+    {{1, 0, 1, 0}, {1, 0, 1, 0}},
+    {{0, 1, 1, 0}, {0, 1, 0, 1}},
+    {{1, 0, 0, 1}, {1, 0, 0, 1}},
+    {{0, 1, 0, 1}, {0, 1, 1, 0}},
+  };
+
+  simulate(in_idx, out_idx, addr_names, instrs, ps);
+}
+#endif
+
+void simulate_ccnot() {
+#include "gen_ccnot.h"
+
+  vector<pvc> ps {
+    {{1, 0, 1, 0, 1, 0}, {1, 0, 1, 0, 1, 0}},
+    {{0, 1, 1, 0, 1, 0}, {0, 1, 1, 0, 1, 0}},
+    {{0, 1, 1, 0, 1, 0}, {0, 1, 1, 0, 1, 0}},
+    {{0, 1, 0, 1, 1, 0}, {0, 1, 0, 1, 0, 1}},
+    {{1, 0, 1, 0, 0, 1}, {1, 0, 1, 0, 0, 1}},
+    {{0, 1, 1, 0, 0, 1}, {0, 1, 1, 0, 0, 1}},
+    {{0, 1, 1, 0, 0, 1}, {0, 1, 1, 0, 0, 1}},
+    {{0, 1, 0, 1, 0, 1}, {0, 1, 0, 1, 1, 0}},
+  };
+
+  simulate(in_idx, out_idx, addr_names, instrs, ps);
+}
+
 int main() {
-  simulate_cnot();
+  simulate_ccnot();
 }
 

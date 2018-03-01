@@ -5,3 +5,4 @@ rmov
 *.dot
 *.svg
 *.dSYM/*
+gen_*.h

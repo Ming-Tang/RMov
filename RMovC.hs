@@ -238,7 +238,11 @@ lang =
     , P.identLetter     = alphaNum <|> char '_'
     , P.reservedOpNames = ["=", "~", ".", "*", ":", "<-"]
     , P.reservedNames   = ["in", "out", "int", "body", "T"]
-    , P.caseSensitive   = True }
+    , P.caseSensitive   = True
+    , P.nestedComments  = True
+    , P.commentStart    = "/*"
+    , P.commentEnd      = "*/"
+    , P.commentLine     = "//" }
 
 type Parser u a = ParsecT String u Data.Functor.Identity.Identity a
 
