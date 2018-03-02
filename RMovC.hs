@@ -1,9 +1,11 @@
-{-# LANGUAGE ViewPatterns, NamedFieldPuns, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ViewPatterns, NamedFieldPuns, GeneralizedNewtypeDeriving,
+             FlexibleContexts #-}
 module RMovC where
 import Text.Show.Prettyprint
 import Control.Monad.RWS.Strict
 import Control.Monad.Except
 import Control.Arrow
+
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Map.Strict(Map)
@@ -20,7 +22,6 @@ import Text.Parsec.Perm
 import System.Environment
 import System.Exit
 
--- TODO input validation: data dependencies, linear typing
 -- TODO automatic placement of dividers
 
 -- Main
@@ -48,6 +49,18 @@ main = do
 
   bds <- parseBDs <$> readFile "Example.bd"
 
+  let ves = filter (not . null . snd) $ M.toList $ validateBDs bds
+  unless (null ves) $ do
+    putStrLn "Validation errors:"
+    forM_ ves $ \(n, ves') -> do
+      putStrLn (n ++ ": ")
+      forM_ ves' $ \(l, ve) ->
+        putStrLn $ "  " ++ show l ++ ":\t" ++ show ve
+
+      putStrLn ""
+
+    exitWith $ ExitFailure 1
+
   case bn of
     Nothing -> do
       print' bds
@@ -60,7 +73,7 @@ main = do
     Just b -> do
       let inScope = ["IN"]
       let em = fromRight (runEmitFromMap (inScope, "") b bds)
-      let ((outs, d), eS, instrs) = em
+      let ((outs, _), _, instrs) = em
       let bd = bds M.! b
 
       case op of
@@ -185,7 +198,7 @@ emitPerm5 = fromRight emitPerm50
 --
 
 runEmitFromMap :: (Scope, String)
-                    -> String -> Map String BlockDef
+                    -> FName -> BlockDefMap
                     -> Either EmitE RunEmitRes
 
 runEmitFromMap (inScope, inPrefix) name bds =
@@ -259,7 +272,7 @@ sepList = sepList' [] [] where
   sepList' xs ys (Nothing:zs) = sepList' (xs ++ [ys]) [] zs
   sepList' xs ys (Just y:zs) = sepList' xs (ys ++ [y])  zs
 
-bd :: Parser u (String, BlockDef)
+bd :: Parser u (FName, BlockDef)
 bd = blk where
 
   blk = (,) <$> ident <*> (bd <$> braces parts)
@@ -291,13 +304,6 @@ bd = blk where
              <|> (BNI <$> ident <*> (colontilde *> ident))
              <|> (const BTI <$> (tilde *> tKw))
              <|> (const BT <$> tKw)
-
-  bnPart = do
-    biName <- ident
-    _ <- colon
-    f <- (tilde *> (flip BNI <$> ident)) <|> (flip BN <$> ident)
-    return $ f biName
-
 
   assignStmt = getStmt <$> names <*> (fmap Left movPart <|> fmap Right funcPart)
 
@@ -357,11 +363,10 @@ bd = blk where
   bodyKw = P.reserved lexer "body"
   tKw = P.reserved lexer "T"
 
-parseBD :: String -> (String, BlockDef)
-parseBDs :: String -> Map String BlockDef
+parseBD :: String -> (FName, BlockDef)
+parseBDs :: String -> BlockDefMap
 parseBD = either (error . show) id . parse (bd <* eof) "<parseBD>"
 parseBDs = either (error . show) M.fromList . parse (many bd <* eof) "<parseBDs>"
-
 
 ------------------------------
 
@@ -387,6 +392,8 @@ data BlockDef = BD { bdIn :: [AName]
                    , bdInt :: Set AName -- TODO never checked
                    , bdBody :: [Level] }
   deriving (Eq, Ord, Show, Read)
+
+type BlockDefMap = Map FName BlockDef
 
 data LBlockInfo = LBI { lbiBIName :: String
                       , lbiScope :: Scope
@@ -426,7 +433,7 @@ type Delay = Integer
 data EmitCtx = EC { ecIns :: Map AName Addr
                   , ecOuts :: [AName]
                   , ecScope :: Scope
-                  , ecBDs :: Map FName BlockDef }
+                  , ecBDs :: BlockDefMap }
   deriving (Eq, Ord, Show, Read)
 
 data EmitErr = BDNotFound FName
@@ -455,6 +462,34 @@ newtype Emit a = Emit { getEmit :: RWST EmitCtx EmitW EmitS (Except EmitE) a }
             MonadWriter EmitW, MonadState EmitS, MonadError EmitE)
 
 type RunEmitRes = ((Map AName Addr, Delay), EmitS, EmitW)
+
+type StmtPath = ((Integer, Integer), BName)
+
+data ValidErr = DupBI BIName
+              | UndefinedBlock FName
+              | CircularBlock FName
+
+              | UndefinedVar AName
+              | UseBeforeDeclare AName
+
+              | TooManyIn AName
+              | TooManyOut AName
+              | MissingIn AName
+              | MissingOut AName
+
+  deriving (Eq, Ord, Show, Read)
+
+type ValidR = (Maybe StmtPath, BlockDef, BlockDefMap)
+type ValidW = [(Maybe StmtPath, ValidErr)]
+
+newtype Valid s a
+    = Valid { getValid :: RWS ValidR ValidW s a }
+  deriving (Functor, Applicative, Monad,
+            MonadReader ValidR,
+            MonadWriter ValidW,
+            MonadState s)
+
+type LTMap = Map AName (Bool, Bool)
 
 ------------------------------
 
@@ -506,7 +541,7 @@ type I2G a = RWS () [String] I2GS a
 
 instrsToGraphviz :: [Instr] -> String
 instrsToGraphviz is = dispTree dtString t where
-  (t, _, r) = runRWS m () (I2GS 1 0)
+  (t, _, _) = runRWS m () (I2GS 1 0)
   m = do
     t <- iTreeToGraphviz $ toITree is
     return $ Node "digraph G" [Leaf "node[shape=Mrecord];", t]
@@ -519,7 +554,7 @@ iTreeToGraphviz (Node (LBlock LBI { lbiBIName
                                   , lbiScope
                                   , lbiIns
                                   , lbiOuts }) xs) = do
-  let (inAddrs, outAddrs) = (snd <$> M.toList lbiIns, snd <$> M.toList lbiOuts)
+  let (inAddrs, _) = (snd <$> M.toList lbiIns, snd <$> M.toList lbiOuts)
   let groupBy key = M.fromListWith (++) . map (key &&& pure)
   let isRoot = length lbiScope < 2
 
@@ -673,6 +708,131 @@ travInstrs m (i:is) = travInstrs m' is where
 
   d' = d + 1
   m' = foldl' (\m a -> M.insert a d' m) m outs
+
+--------------------------------
+
+validateBDs :: BlockDefMap -> Map FName ValidW
+validateBDs m = M.mapWithKey (\k b -> validateBD (M.delete k m) b) m
+
+validateBD :: BlockDefMap -> BlockDef -> ValidW
+
+validateBD m bd = concatMap (\v -> v m bd)
+  [ validateBINames
+  , validateBNames
+  , validateANames
+  , validateLinearTyping ]
+
+validateBINames, validateBNames
+  , validateANames, validateLinearTyping
+  , validateDataDep :: BlockDefMap -> BlockDef -> ValidW
+
+validateBINames m bd@(bdBPs -> bps) = travStmts_ f S.empty m bd where
+  f :: (BName, ArgsPair) -> Valid (Set BIName) ()
+  f (getBIName -> Just n, _) = do
+    s <- get
+    validErrs [DupBI n | S.member n s]
+    modify (S.insert n)
+
+  f _ = return ()
+
+validateBNames m bd@(bdBPs -> bps) = travStmts_ f () m bd where
+  f :: (BName, ArgsPair) -> Valid () ()
+  f s@(getFName -> Just fn, _) =
+    validErrs [UndefinedBlock fn | not (M.member fn m)]
+
+  f _ = return ()
+
+validateANames m bd@BD { bdIn, bdOut, bdInt } = travStmts_ f () m bd where
+  names = S.unions [S.fromList bdIn, S.fromList bdOut, bdInt]
+
+  f :: Stmt -> Valid () ()
+  f (_, AP { apOut, apIn }) =
+    validErrs [ UndefinedVar x | x <- apIn ++ apOut, not (S.member x names) ]
+
+validateLinearTyping m bd@BD { bdIn, bdOut, bdInt }
+    = snd $ travStmts (f, \_ -> return (), const finalValid) ltm0 m bd where
+  ltm0 :: LTMap
+  ltm0 = M.fromList $
+              map (w (False, True)) bdIn ++ map (w (True, False)) bdOut
+           ++ map (w (False, False)) (S.toList bdInt) where w = flip (,)
+
+  f :: Stmt -> Valid LTMap ()
+  f (_, AP { apOut, apIn }) = mapM_ useOut apOut >> mapM_ useIn apIn
+
+  finalValid :: Valid LTMap ()
+  finalValid = get >>= \(M.toList -> ltm') ->
+    validErrs $ [ MissingIn v | (v, (False, _)) <- ltm' ]
+              ++ [ MissingOut v | (v, (_, False)) <- ltm' ]
+
+  use errs upd v = do
+    ltm <- get
+    case M.lookup (v :: AName) ltm of
+      Nothing -> return ()
+      Just p -> do
+        validErrs $ errs v p
+        put $ M.insert v (upd p) ltm
+
+  useOut = use (\v (_, uOut) -> [TooManyOut v | uOut])
+               (\(uIn, _) -> (uIn, True))
+  useIn = use (\v (uIn, uOut) -> [TooManyIn v | uIn])
+               (\(_, uOut) -> (True, uOut))
+
+validateDataDep m bd@BD { bdIn = (S.fromList -> bdIn') }
+    = snd $ travStmts (stmtOuts, addToOuts, \_ -> return ()) bdIn' m bd where
+
+  stmtOuts (_, AP { apOut, apIn }) = do
+    outVars <- get
+    validErrs [ UseBeforeDeclare v | v <- apIn, not (S.member v outVars) ]
+    return apOut
+
+  addToOuts (S.fromList . concat -> vs) = modify (S.union vs)
+
+bdBPs :: BlockDef -> [(StmtPath, Stmt)]
+bdBPs = concat . bodyWithPaths . bdBody
+
+validErrs :: [ValidErr] -> Valid s ()
+validErrs [] = return ()
+validErrs es = ask >>= \(p, _, _) -> tell $ map ((,) p) es
+
+travStmts :: (Stmt -> Valid s a, [a] -> Valid s b, [b] -> Valid s c)
+             -> s -> BlockDefMap -> BlockDef -> (c, ValidW)
+
+travStmts (fStmt, fLevel, fAgg) s0 m
+          bd@BD { bdBody = (bodyWithPaths -> ls) } = (c, w) where
+  (c, _, w) = runRWS (getValid mBody) (Nothing, bd, m) s0
+  mBody = mapM mLevel ls >>= fAgg
+  mLevel lv = mapM mStmt (lv :: [(StmtPath, Stmt)]) >>= fLevel
+  mStmt (sp, s) = local (\(_, bd, m) -> (Just sp, bd, m)) $ fStmt s
+
+travStmts_ :: (Stmt -> Valid s ()) -> s -> BlockDefMap -> BlockDef -> ValidW
+travStmts_ fStmt s0 m bd = snd $ travStmts (fStmt, u, u) s0 m bd where
+  u _ = return ()
+
+bodyWithPaths :: [Level] -> [[(StmtPath, Stmt)]]
+bodyWithPaths body = body' where
+  body' = map (map f3 . uncurry (zip . cycle . pure))
+              $ indexed $ map indexed body where indexed = zip [0..]
+
+  f3 (a, (b, stmt)) = (((a, b), fst stmt), stmt)
+
+getBIName :: BName -> Maybe BIName
+getBIName (BN n _) = Just n
+getBIName (BNI n _) = Just n
+getBIName _ = Nothing
+
+getFName :: BName -> Maybe FName
+getFName (BN _ n) = Just n
+getFName (BNI _ n) = Just n
+getFName _ = Nothing
+
+-- TODO detect circular dependencies
+makeRefGraph :: BlockDefMap -> Map FName [(StmtPath, FName)]
+makeRefGraph = M.map getRefs
+
+getRefs :: BlockDef -> [(StmtPath, FName)]
+getRefs = mapMaybe f . concat . bodyWithPaths . bdBody where
+  f (p, (getFName -> Just fn, _)) = Just (p, fn)
+  f _ = Nothing
 
 --------------------------------
 
